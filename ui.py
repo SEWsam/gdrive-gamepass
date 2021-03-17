@@ -7,8 +7,11 @@ Licensed under the MIT License. See LICENSE for more info.
 import os
 import PyQt5
 import sys
+
 from PyQt5.QtWidgets import QFileDialog
+import sync_module
 from PyQt5 import QtWidgets, uic, QtCore
+from PyQt5.QtCore import QRunnable
 
 
 class Custom(QtWidgets.QDialog):
