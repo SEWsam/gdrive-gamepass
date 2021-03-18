@@ -1,5 +1,8 @@
 <component name="CopyrightManager">
   <settings>
+    <module2copyright>
+      <element module="Python" copyright="gplv3" />
+    </module2copyright>
     <LanguageOptions name="Python">
       <option name="fileTypeOverride" value="3" />
       <option name="separateBefore" value="true" />
