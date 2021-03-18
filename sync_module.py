@@ -5,7 +5,7 @@ Licensed under the MIT License. See LICENSE for more info.
 """
 import os
 from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive, GoogleDriveFile
+from pydrive.drive import GoogleDrive
 import time
 import json
 
