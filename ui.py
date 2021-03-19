@@ -104,6 +104,12 @@ class MainWindow(QtWidgets.QMainWindow):
         GameList(self)
 
 
+if hasattr(QtCore.Qt, 'AA_EnableHighDpiScaling'):
+    PyQt5.QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
+
+if hasattr(QtCore.Qt, 'AA_UseHighDpiPixmaps'):
+    PyQt5.QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
+
 app = QtWidgets.QApplication(sys.argv)
 window = MainWindow()
 app.exec_()
