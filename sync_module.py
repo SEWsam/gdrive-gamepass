@@ -1,5 +1,11 @@
 """sync_module.py: Manages local and cloud game saves.
 
+`Recursive hashing solution
+<https://stackoverflow.com/questions/36204248/creating-unique-hash-for-directory-in-python>`_
+
+----------------
+COPYRIGHT NOTICE
+----------------
 Copyright (C) 2021 Samuel Wirth
 
 This program is free software: you can redistribute it and/or modify

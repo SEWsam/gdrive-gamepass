@@ -1,5 +1,8 @@
 """ui.py - UI interface for sync_module.
 
+----------------
+COPYRIGHT NOTICE
+----------------
 Copyright (C) 2021 Samuel Wirth
 
 This program is free software: you can redistribute it and/or modify
