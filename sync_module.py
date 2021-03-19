@@ -141,7 +141,7 @@ class SyncSession:
 
         # TODO: speed this up by forcing parent to be root
         folders = self.drive.ListFile(
-            {"q": "mimeType='application/vnd.google-apps.folder' and trashed=false"}
+            {"q": "'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"}
         ).GetList()
 
         for i in folders:
