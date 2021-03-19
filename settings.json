@@ -1,6 +1,1 @@
-{
-    "base_revision": 0,
-    "email": "",
-    "auto_sync": false,
-    "games": []
-}
+{"base_revision": 0, "email": "", "auto_sync": false, "games": [{"name": "testgame", "cloud_index": 0, "path": "C:\\Users\\Sam\\PycharmProjects\\gdrive-gamepass\\testsave"}]}
