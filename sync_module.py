@@ -217,10 +217,14 @@ class SyncSession:
         roots = os.path.split(path)
         sys_root = roots[0]
         save_root = roots[1]
-        # TODO: Speed this up with one call
-        parent_ids = self.config_handler(index=index)['parent_ids']
-        file_data = self.config_handler(index=index)['file_data']
-        root_id = self.config_handler(index=index)['root_id']
+        game_config = self.config_handler(index=index)
+        parent_ids = game_config['parent_ids']
+        file_ids = game_config['file_ids']
+        root_id = game_config['root_id']
+
+        # Save metadata
+        # todo: add time
+        self.config_handler(index=index, hash=hash_dir(path))
 
         # TODO: Possibly fix redundancy?
         if save_root not in parent_ids:
