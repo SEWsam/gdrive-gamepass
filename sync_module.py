@@ -243,30 +243,30 @@ class SyncSession:
 
                     parent_ids.update(**self.init_directories(**dir_kwargs))
 
-        # Upload/update files. If the file already exists on the cloud ['file_data'], overwrite it.
+        # Upload/update files. If the file already exists on the cloud ['file_ids'], overwrite it.
         # TODO: Detect removed files
         for root, dirs, files in os.walk(path):
             for f in files:
                 filepath = os.path.join(root.replace(sys_root, '')[1:], f)
 
 
-                if filepath in file_data:
-                    file_meta = {'id': file_data[filepath]['id']}
+                if filepath in file_ids:
+                    file_meta = {'id': file_ids[filepath]}
                 else:
                     file_meta = {'title': f, 'parents': [{'id': parent_ids[root.replace(sys_root, '')[1:]]}]}
 
                 fileitem = self.drive.CreateFile(file_meta)
                 fileitem.SetContentFile(os.path.join(root, f))
                 fileitem.Upload()
-                new_data = {filepath: {'id': fileitem['id'], 'hash': 'nothing yet'}}
-                file_data.update(**new_data)
+                new_data = {filepath: fileitem['id']}
+                file_ids.update(**new_data)
 
-                self.config_handler(index=index, file_data=file_data)
+                self.config_handler(index=index, file_ids=file_ids)
 
         self.config_handler(index=index, parent_ids=parent_ids)
 
     def add_game_entry(self, name):
-        self.config_handler(name=name, parent_ids={}, file_data={})
+        self.config_handler(name=name, parent_ids={}, file_ids={})
         save_root = self.drive.CreateFile(
             {
                 'title': f"{name}-{len(self.app_config_json['games']) - 1}",
@@ -278,28 +278,24 @@ class SyncSession:
 
         self.config_handler(index=-1, root_id=save_root['id'])
 
-    def enable_game_entry(self, index, path):
-        game_entry = self.config_handler(index=index)
+    def enable_game_entry(self, cloud_index, path):
+        game_entry = self.config_handler(index=cloud_index)
+        local_entry = {'name': game_entry['name'], 'cloud_index': cloud_index, 'path': path}
+        
+        self.local_config['games'].append(local_entry)
+        self.update_local_config()
 
-        with open('settings.json', 'r') as f:
-            settings = json.load(f)
-
-        local_entry = {'name': game_entry['name'], 'cloud_index': index, 'path': path}
-        settings['games'].append(local_entry)
-
-        with open('settings.json', 'w') as f:
-            f.write(json.dumps(settings, indent=4))
-
-    def push(self, index):
+    def push(self, local_index):
         pass
 
 
-
+#
 # session = SyncSession()
 # #
 # session.authenticate()
+# blah = session.local_config['games'][0]
 # # session.config_handler(delete=True, index=0)
-# session.upload_save("C:/Users/ponch/PycharmProjects/gdrive-gamepass/testsave", 0)
+# session.upload_save("C:/Users/Sam/PycharmProjects/gdrive-gamepass/testsave", 0)
 # print(session.config_handler())
 # # session.add_game_entry("Prey")
 # # session.enable_game_entry(0, "C:\\Users\\ponch\\PycharmProjects\\gdrive-gamepass\\testsave")
