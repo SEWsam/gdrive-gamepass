@@ -24,6 +24,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import os
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
+from pydrive.files import ApiRequestError
 import time
 import json
 import hashlib
@@ -31,17 +32,25 @@ import hashlib
 start_time = time.time()
 
 
-def hash_file(filepath):
-    sha = hashlib.sha1()
+def hash_file(filepath, md5=False):
+    """Hash a single file, using sha1 or md5
+
+    :param str filepath: Path to the file to be hashed.
+    :param bool md5: Whether or not to use md5 instead of sha1. Default: False
+    """
+    if md5:
+        hash_obj = hashlib.md5()
+    else:
+        hash_obj = hashlib.sha1()
 
     with open(filepath, 'rb') as f:
         while True:
             block = f.read(2 ** 10)
             if not block:
                 break
-            sha.update(block)
+            hash_obj.update(block)
 
-        return sha.hexdigest()
+        return hash_obj.hexdigest()
 
 
 def hash_dir(path):
@@ -69,6 +78,7 @@ class SyncSession:
         with open('settings.json', 'r') as f:
             self.local_config = json.load(f)
 
+    # todo: remove reliance on this
     @property
     def app_config_json(self):
         try:
@@ -80,7 +90,7 @@ class SyncSession:
         """Update local config file to match changes"""
 
         with open('settings.json', 'w') as f:
-            f.write(json.dumps(self.local_config))
+            f.write(json.dumps(self.local_config, indent=4))
 
     def config_handler(self, delete=False, index=None, **kwargs):
         """Read and write to the remote config['games']
@@ -139,7 +149,6 @@ class SyncSession:
 
         self.drive = GoogleDrive(gauth)
 
-        # TODO: speed this up by forcing parent to be root
         folders = self.drive.ListFile(
             {"q": "'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"}
         ).GetList()
@@ -211,20 +220,28 @@ class SyncSession:
         """Upload or update existing files accordingly"""
         pass
 
-    def upload_save(self, path, index):
+    def upload_save(self, index):
         """Create new dirs and overwrite files recursively in a chosen dir"""
 
+        local_config = self.local_config()[index]
+        path = local_config['path']
+        cloud_index = local_config['cloud_index']
         roots = os.path.split(path)
         sys_root = roots[0]
         save_root = roots[1]
-        game_config = self.config_handler(index=index)
+        game_config = self.config_handler(index=cloud_index)
         parent_ids = game_config['parent_ids']
         file_ids = game_config['file_ids']
         root_id = game_config['root_id']
 
+        # Find locally deleted files and update the cloud
+        # todo: dir_set - parent_ids.keys() | file_set = file_ids.keys()
+        dir_set = {save_root}
+        file_set = set()
+
         # Save metadata
         # todo: add time
-        self.config_handler(index=index, hash=hash_dir(path))
+        self.config_handler(index=cloud_index, hash=hash_dir(path))
 
         # TODO: Possibly fix redundancy?
         if save_root not in parent_ids:
@@ -234,36 +251,66 @@ class SyncSession:
 
         # Initialize directories. If the directory is already present on the cloud ['parent_ids'], it is ignored.
         for root, dirs, files in os.walk(path):
+            relative_root = root.replace(sys_root, '')[1:]
             for d in dirs:
-                if os.path.join(root.replace(sys_root, '')[1:], d) not in parent_ids:
-                    dir_kwargs = {'root_id': self.config_handler(index=index)['root_id'],
-                                  'root': root.replace(sys_root, '')[1:],
+                dir_set.add(os.path.join(relative_root, d))
+
+                if os.path.join(relative_root, d) not in parent_ids:
+                    dir_kwargs = {'root_id': self.config_handler(index=cloud_index)['root_id'],
+                                  'root': relative_root,
                                   'dirname': d,
                                   'parent_ids': parent_ids}
 
                     parent_ids.update(**self.init_directories(**dir_kwargs))
 
+        # Delete dirs not present locally
+        deleted_dirs = parent_ids.keys() - dir_set
+        for del_dir in deleted_dirs:
+            i = game_config['parent_ids'].pop(del_dir)
+            dir_file = self.drive.CreateFile({'id': i})
+            try:
+                dir_file.Delete()
+            except ApiRequestError:
+                pass
+
         # Upload/update files. If the file already exists on the cloud ['file_ids'], overwrite it.
         # TODO: Detect removed files
         for root, dirs, files in os.walk(path):
+            relative_root = root.replace(sys_root, '')[1:]
             for f in files:
-                filepath = os.path.join(root.replace(sys_root, '')[1:], f)
-
+                filepath = os.path.join(relative_root, f)
+                file_set.add(filepath)
 
                 if filepath in file_ids:
                     file_meta = {'id': file_ids[filepath]}
                 else:
-                    file_meta = {'title': f, 'parents': [{'id': parent_ids[root.replace(sys_root, '')[1:]]}]}
+                    file_meta = {'title': f, 'parents': [{'id': parent_ids[relative_root]}]}
 
                 fileitem = self.drive.CreateFile(file_meta)
+
+                if filepath in file_ids:
+                    cloudfile_hash = fileitem['md5Checksum']
+                    localfile_hash = hash_file(os.path.join(root, f), md5=True)
+
+                    if cloudfile_hash == localfile_hash:
+                        return
+
                 fileitem.SetContentFile(os.path.join(root, f))
                 fileitem.Upload()
                 new_data = {filepath: fileitem['id']}
                 file_ids.update(**new_data)
 
-                self.config_handler(index=index, file_ids=file_ids)
+        # Delete files not present locally
+        deleted_files = file_ids.keys() - file_set
+        for del_file in deleted_files:
+            i = game_config['file_ids'].pop(del_file)
+            dir_file = self.drive.CreateFile({'id': i})
+            try:
+                dir_file.Delete()
+            except ApiRequestError:
+                pass
 
-        self.config_handler(index=index, parent_ids=parent_ids)
+        self.config_handler(index=index, file_ids=file_ids, parent_ids=parent_ids)
 
     def add_game_entry(self, name):
         self.config_handler(name=name, parent_ids={}, file_ids={})
@@ -290,15 +337,15 @@ class SyncSession:
 
 
 #
-# session = SyncSession()
-# #
-# session.authenticate()
+session = SyncSession()
+#
+session.authenticate()
 # blah = session.local_config['games'][0]
 # # session.config_handler(delete=True, index=0)
-# session.upload_save("C:/Users/Sam/PycharmProjects/gdrive-gamepass/testsave", 0)
+session.upload_save("C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame", 1)
 # print(session.config_handler())
-# # session.add_game_entry("Prey")
-# # session.enable_game_entry(0, "C:\\Users\\ponch\\PycharmProjects\\gdrive-gamepass\\testsave")
+# session.add_game_entry("Dishonored 2")
+# session.enable_game_entry(1, 'C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame')
 # print("\n\n\n")
 
 
