@@ -26,8 +26,39 @@ from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
 import time
 import json
+import hashlib
 
 start_time = time.time()
+
+
+def hash_file(filepath):
+    sha = hashlib.sha1()
+
+    with open(filepath, 'rb') as f:
+        while True:
+            block = f.read(2 ** 10)
+            if not block:
+                break
+            sha.update(block)
+
+        return sha.hexdigest()
+
+
+def hash_dir(path):
+    hashes = []
+
+    for root, dirs, files in os.walk(path):
+        for file in sorted(files):
+            hashes.append(hash_file(os.path.join(root, file)))
+
+        for d in sorted(dirs):
+            hashes.append(hash_dir(os.path.join(root, d)))
+
+        break
+
+    hashes_concat = (''.join(hashes))
+    final_hash = hashlib.sha1(hashes_concat.encode())
+    return str(final_hash.hexdigest())
 
 
 class SyncSession:
@@ -136,7 +167,23 @@ class SyncSession:
         print(self.save_folder['id'])
         print(self.app_config['id'])
 
-    # TODO: ADD HASHING
+    def diff(self, local_index):
+        """Determine whether the remote save differs from the local copy
+        
+        :param int local_index: The index of the game info in the local config
+        :returns: True if the saves are different.
+        :rtype: bool
+        """
+        
+        game_config = self.local_config['games'][local_index]
+        cloud_config = self.config_handler(index=game_config['cloud_index'])
+        local_hash = hash_dir(game_config['path'])
+        cloud_hash = cloud_config['hash']
+        
+        if cloud_hash == local_hash:
+            return False
+        else:
+            return True
 
     def init_directories(self, root_id, root, dirname, parent_ids):
         """Create dirs and subdirs based on the path and existing dirs."""
