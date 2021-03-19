@@ -223,7 +223,7 @@ class SyncSession:
     def upload_save(self, index):
         """Create new dirs and overwrite files recursively in a chosen dir"""
 
-        local_config = self.local_config()[index]
+        local_config = self.local_config['games'][index]
         path = local_config['path']
         cloud_index = local_config['cloud_index']
         roots = os.path.split(path)
@@ -337,12 +337,12 @@ class SyncSession:
 
 
 #
-session = SyncSession()
+# session = SyncSession()
 #
-session.authenticate()
+# session.authenticate()
 # blah = session.local_config['games'][0]
 # # session.config_handler(delete=True, index=0)
-session.upload_save("C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame", 1)
+# session.upload_save("C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame", 1)
 # print(session.config_handler())
 # session.add_game_entry("Dishonored 2")
 # session.enable_game_entry(1, 'C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame')
