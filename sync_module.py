@@ -314,6 +314,28 @@ class SyncSession:
     def sync(self, local_index):
         """Sync changes using the newest possible revision
 
+        :param int local_index: The index of the game config in the local settings.
+        """
+
+        if self.diff(local_index) and self.diff(local_index, diff_local=False):
+            # Changes made locally, changes made remotely (conflict)
+            print("Save conflict")  # TODO: Figure this out
+        elif not self.diff(local_index) and self.diff(local_index, diff_local=False):
+            # No changes locally, changes made remotely (pull)
+            self.pull(local_index)
+        elif self.diff(local_index) and not self.diff(local_index, diff_local=False):
+            # Changes made locally, no changes remotely (push)
+            self.push(local_index)
+        else:
+            # No changes on local or remote end
+            pass  # TODO: Log this
+
+
+# TODO: NOTE: code below gets time:
+"""
+timestamp = name.split('-')[-1]
+save_time = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %I:%M:%S %p')
+"""
 #
 # session = SyncSession()
 #
