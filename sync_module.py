@@ -236,8 +236,83 @@ class SyncSession:
         self.update_local_config()
 
     def push(self, local_index):
-        pass
+        """Upload saves as tarballs, keeping a history of saves
 
+        :param local_index: The index of the game config in the local settings.
+        """
+
+        push_time = time.time()
+
+        # Data we will be using
+        local_config = self.local_config['games'][local_index]
+        game_name = local_config['name']
+        save_path = local_config['path']
+        cloud_index = local_config['cloud_index']
+
+        game_config = self.remote_config_handler(index=cloud_index)
+        root_id = game_config['root_id']
+
+        # Get the save's hash
+        save_hash = hash_dir(save_path)
+        self.remote_config_handler(index=cloud_index, latest_hash=save_hash)
+        local_config.update(base_hash=save_hash)
+
+        tar_time = time.time()
+        print("tarring")
+
+        archive_name = f'{game_name}_{cloud_index}-{time.time()}.save.tar'  # foo_0-000000000...save.txz
+        with tarfile.open('temp/' + archive_name, 'w') as tar:
+            tar.add(save_path, arcname=os.path.basename(save_path))
+
+        end_tar_time = time.time()
+        print(f'The tarring took {end_tar_time - tar_time} seconds')
+
+        upload_time = time.time()
+
+        file_meta = {'title': archive_name, 'parents': [{'id': root_id}]}
+        fileitem = self.drive.CreateFile(file_meta)
+        fileitem.SetContentFile('temp/' + archive_name)
+        fileitem.Upload()
+        fileitem.content.close()
+
+        end_upload = time.time()
+        print(f'the upload took {end_upload - upload_time} seconds')
+
+        os.remove('temp/' + archive_name)
+
+        game_config['saves'].append(fileitem['id'])
+        self.local_config['games'][local_index] = local_config
+        self.update_local_config()
+        self.remote_config_handler(index=cloud_index, **game_config)
+
+        end_push = time.time()
+
+        print(f'The entire push took {end_push - push_time} seconds.')
+
+    def pull(self, local_index, save_index=-1):
+        """Download and extract a game save
+
+        :param int local_index: The index of the local game config
+        :param int save_index: The index of the save in the 'saves' list on the cloud. Defaults to -1.
+        """
+
+        # Data we will be using
+        game_config = self.local_config['games'][local_index]
+        extract_path = os.path.split(game_config['path'])[0]
+        cloud_index = game_config['cloud_index']
+
+        cloud_config = self.remote_config_handler(index=cloud_index)
+        save_id = cloud_config['saves'][save_index]
+
+        fileitem = self.drive.CreateFile({'id': save_id})
+
+        fileitem.GetContentFile('temp/' + fileitem['title'])
+
+        with tarfile.open('temp/' + fileitem['title'], 'r') as tar:
+            tar.extractall(extract_path)
+
+    def sync(self, local_index):
+        """Sync changes using the newest possible revision
 
 #
 # session = SyncSession()
