@@ -260,8 +260,8 @@ class SyncSession:
 
         # Get the save's hash
         save_hash = hash_dir(save_path)
-        self.remote_config_handler(index=cloud_index, latest_hash=save_hash)
-        local_config.update(base_hash=save_hash)
+        game_config['latest_hash'] = save_hash
+        local_config['base_hash'] = save_hash
 
         tar_time = time.time()
         print("tarring")
@@ -303,34 +303,44 @@ class SyncSession:
         """
 
         # Data we will be using
-        game_config = self.local_config['games'][local_index]
-        extract_path = os.path.split(game_config['path'])[0]
-        cloud_index = game_config['cloud_index']
+        local_config = self.local_config['games'][local_index]
+        save_path = local_config['path']
+        extract_path = os.path.split(save_path)[0]
+        cloud_index = local_config['cloud_index']
 
         cloud_config = self.remote_config_handler(index=cloud_index)
         save_id = cloud_config['saves'][save_index]
+        local_config['base_hash'] = cloud_config['latest_hash']
 
         fileitem = self.drive.CreateFile({'id': save_id})
 
         fileitem.GetContentFile('temp/' + fileitem['title'])
-
+        shutil.rmtree(save_path)
         with tarfile.open('temp/' + fileitem['title'], 'r') as tar:
             tar.extractall(extract_path)
+
+        os.remove('temp/' + fileitem['title'])
+
+        self.update_local_config()
 
     def sync(self, local_index):
         """Sync changes using the newest possible revision
 
         :param int local_index: The index of the game config in the local settings.
         """
+        local_config = self.local_config[local_index]
+        saves_list = self.remote_config_handler(idnex=self.remote_config_handler(index=local_config['cloud_index']))
 
         if self.diff(local_index) and self.diff(local_index, diff_local=False):
             # Changes made locally, changes made remotely (conflict)
-            print("Save conflict")  # TODO: Figure this out
+            return saves_list
         elif not self.diff(local_index) and self.diff(local_index, diff_local=False):
             # No changes locally, changes made remotely (pull)
+            print('pull')
             self.pull(local_index)
         elif self.diff(local_index) and not self.diff(local_index, diff_local=False):
             # Changes made locally, no changes remotely (push)
+            print('push')
             self.push(local_index)
         else:
             # No changes on local or remote end
@@ -343,30 +353,12 @@ timestamp = name.split('-')[-1]
 save_time = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %I:%M:%S %p')
 """
 #
-# session = SyncSession()
-#
-# session.authenticate()
-# session.diff(0)
-# blah = session.local_config['games'][0]
-# # session.config_handler(delete=True, index=0)
-# session.upload_save("C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame", 1)
-# print(session.config_handler())
-# session.add_game_entry("Dishonored 2")
-# session.enable_game_entry(1, 'C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame')
-# print("\n\n\n")
-
-
-# base_root = os.path.split("C:\\Users\\ponch\\PycharmProjects\\gdrive-gamepass\\testsave")[0]
-# for root, dirs, files in os.walk("C:\\Users\\ponch\\PycharmProjects\\gdrive-gamepass\\testsave"):
-#     for dire in dirs:
-#         print(root.replace(base_root, '') + '\\\\' + dire)
+session = SyncSession()
+session.authenticate()
+# session.add_game_entry('Prey')
+# session.enable_game_entry(0, 'C:\\Users\\ponch\\Saved Games\\Arkane Studios\\Prey_MS\\SaveGames')
+session.sync(0)
 
 end_time = time.time()
 
 print(f"complete in {end_time - start_time}")
-# 
-# dict1 = {"item3": "fs daafvac", "item1": "thingsonfl", "item2": "dahdklahldajhl"}
-# dict2 = {"item2": "adasd gg", "item1": "nstavgafb", "item3": "fs vac"}
-# 
-# if dict1.keys() == dict2.keys():
-#     print("h")
