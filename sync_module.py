@@ -214,10 +214,6 @@ class SyncSession:
 
         return {os.path.join(root, dirname): folder['id']}  # Return the ID for use as a parent dir later
 
-    def upload_files(self):
-        """Upload or update existing files accordingly"""
-        pass
-
     def upload_save(self, index):
         """Create new dirs and overwrite files recursively in a chosen dir"""
 
