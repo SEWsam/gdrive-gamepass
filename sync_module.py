@@ -78,14 +78,6 @@ class SyncSession:
         with open('settings.json', 'r') as f:
             self.local_config = json.load(f)
 
-    # todo: remove reliance on this
-    @property
-    def app_config_json(self):
-        try:
-            return json.loads(self.app_config.GetContentString())
-        except AttributeError:
-            return None
-
     def update_local_config(self):
         """Update local config file to match changes"""
 
@@ -98,9 +90,15 @@ class SyncSession:
         :param bool delete: When True, the selected index is deleted and the 'base_revision' is incremented
         :param int index: Optional. The index of the game item to return. Defaults to None, which returns all values.
         :param kwargs: Optional: Write values in config.
-        :returns: Modified config.
+        :returns: Modified config. None if dict is inaccessible.
+        :rtype: dict or None
         """
-        working_json = self.app_config_json
+
+        try:
+            working_json = json.loads(self.app_config.GetContentString())
+        except AttributeError:
+            return None
+
         if not delete:
             if index is not None:
                 if kwargs:
@@ -316,7 +314,7 @@ class SyncSession:
         self.config_handler(name=name, parent_ids={}, file_ids={})
         save_root = self.drive.CreateFile(
             {
-                'title': f"{name}-{len(self.app_config_json['games']) - 1}",
+                'title': f"{name}-{len(self.config_handler()) - 1}",
                 'mimeType': 'application/vnd.google-apps.folder',
                 'parents': [{'id': self.save_folder['id']}]
             }
