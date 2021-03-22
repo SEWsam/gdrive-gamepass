@@ -75,6 +75,19 @@ def hash_dir(path):
 
 
 class SyncSession:
+    """Integrate with google drive to upload and manage game saves.
+    
+    ----------------------
+    Important definitions:  
+    ----------------------
+    - index: The index of a list, based on context.
+    - local_index: The index of the game in the local config.
+    - cloud_index: The index of the game in the cloud config.
+    - remote: Google drive
+    - save archive: An archive of a specific savegame, at a certain time.
+    - base version: The origin save archive that the local save is based on.
+    """
+
     def __init__(self):
         self.drive = None
         self.save_folder = None
@@ -88,7 +101,7 @@ class SyncSession:
         with open('settings.json', 'w') as f:
             f.write(json.dumps(self.local_config, indent=4))
 
-    def config_handler(self, delete=False, index=None, **kwargs):
+    def remote_config_handler(self, delete=False, index=None, **kwargs):
         """Read and write to the remote config['games']
 
         :param bool delete: When True, the selected index is deleted and the 'base_revision' is incremented
@@ -128,8 +141,11 @@ class SyncSession:
 
         return return_value
 
-    def initialize_gdrive(self, old_folder, old_config):
-        """Initialize App in Google Drive"""
+    def initialize_gdrive(self, original):
+        """Initialize App in Google Drive; create app folder and config.
+
+        :param original: Preexisting app folder if applicable.
+        """
 
         self.save_folder = original or self.drive.CreateFile(
             {'title': 'Gamepass Saves', 'mimeType': 'application/vnd.google-apps.folder'}
@@ -143,7 +159,7 @@ class SyncSession:
         self.app_config.Upload()
 
     def authenticate(self):
-        """Authenticate with google drive"""
+        """Create an authenticated drive session."""
 
         # The settings used allow app-only files to be changed, and credentials are saved
         gauth = GoogleAuth(settings_file='authentication/settings.yaml')
@@ -175,10 +191,11 @@ class SyncSession:
         print(self.save_folder['id'])
         print(self.app_config['id'])
 
-    def diff(self, local_index):
-        """Determine whether the remote save differs from the local copy
+    def diff(self, local_index, diff_local=True):
+        """Determine whether the current save has changed locally or if it differs from the remote gamesave
         
         :param int local_index: The index of the game info in the local config
+        :param bool diff_local: Check the base version against the current gamesave. Defaults to True.
         :returns: True if the saves are different.
         :rtype: bool
         """
@@ -328,6 +345,7 @@ save_time = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %I:%M
 # session = SyncSession()
 #
 # session.authenticate()
+# session.diff(0)
 # blah = session.local_config['games'][0]
 # # session.config_handler(delete=True, index=0)
 # session.upload_save("C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame", 1)
@@ -335,19 +353,6 @@ save_time = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %I:%M
 # session.add_game_entry("Dishonored 2")
 # session.enable_game_entry(1, 'C:\\Users\\Sam\\Saved Games\\Arkane Studios\\Dishonored2\\base\\savegame')
 # print("\n\n\n")
-
-
-# session.upload_folder('testsave')
-# filelol = session.drive.CreateFile({'id': 'breuh'})
-
-# jsonobj = json.loads(session.app_config.GetContentString())
-#
-#
-# session.app_config.SetContentString(json.dumps(jsonobj, indent=4))
-# session.app_config.Upload()
-#
-# jsondict = dict(jsonobj)
-# print(jsondict)
 
 
 # base_root = os.path.split("C:\\Users\\ponch\\PycharmProjects\\gdrive-gamepass\\testsave")[0]
