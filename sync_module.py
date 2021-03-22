@@ -131,12 +131,12 @@ class SyncSession:
     def initialize_gdrive(self, old_folder, old_config):
         """Initialize App in Google Drive"""
 
-        self.save_folder = old_folder or self.drive.CreateFile(
+        self.save_folder = original or self.drive.CreateFile(
             {'title': 'Gamepass Saves', 'mimeType': 'application/vnd.google-apps.folder'}
         )
         self.save_folder.Upload()
 
-        self.app_config = old_config or self.drive.CreateFile(
+        self.app_config = self.drive.CreateFile(
             {'title': 'config.json', 'mimeType': 'application/json', 'parents': [{'id': self.save_folder['id']}]}
         )
         self.app_config.SetContentString('{"base_revision": 0, "games": []}')
@@ -160,9 +160,6 @@ class SyncSession:
                 self.save_folder = i
                 break
 
-        if self.save_folder is None:
-            self.initialize_gdrive(self.save_folder, self.app_config)
-
         app_data = self.drive.ListFile(
             {"q": f"'{self.save_folder['id']}' in parents and mimeType='application/json' and trashed=false"}
         ).GetList()
@@ -173,7 +170,7 @@ class SyncSession:
                 break
 
         if self.app_config is None:
-            self.initialize_gdrive(self.save_folder, self.app_config)
+            self.initialize_gdrive(self.save_folder)
 
         print(self.save_folder['id'])
         print(self.app_config['id'])
@@ -185,16 +182,6 @@ class SyncSession:
         :returns: True if the saves are different.
         :rtype: bool
         """
-        
-        game_config = self.local_config['games'][local_index]
-        cloud_config = self.config_handler(index=game_config['cloud_index'])
-        local_hash = hash_dir(game_config['path'])
-        cloud_hash = cloud_config['hash']
-        
-        if cloud_hash == local_hash:
-            return False
-        else:
-            return True
 
         game_config = self.local_config['games'][local_index]
         base_hash = game_config['']
@@ -216,22 +203,23 @@ class SyncSession:
                 return True
 
     def add_game_entry(self, name):
-        self.config_handler(name=name, parent_ids={}, file_ids={})
+        self.remote_config_handler(name=name, saves=[], latest_hash='')
+
         save_root = self.drive.CreateFile(
             {
-                'title': f"{name}-{len(self.config_handler()) - 1}",
+                'title': f"{name}_{len(self.remote_config_handler()) - 1}",
                 'mimeType': 'application/vnd.google-apps.folder',
                 'parents': [{'id': self.save_folder['id']}]
             }
         )
         save_root.Upload()
 
-        self.config_handler(index=-1, root_id=save_root['id'])
+        self.remote_config_handler(index=-1, root_id=save_root['id'])
 
     def enable_game_entry(self, cloud_index, path):
-        game_entry = self.config_handler(index=cloud_index)
-        local_entry = {'name': game_entry['name'], 'cloud_index': cloud_index, 'path': path}
-        
+        game_entry = self.remote_config_handler(index=cloud_index)
+        local_entry = {'name': game_entry['name'], 'cloud_index': cloud_index, 'path': path, 'base_hash': ''}
+
         self.local_config['games'].append(local_entry)
         self.update_local_config()
 
