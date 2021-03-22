@@ -35,16 +35,13 @@ import hashlib
 start_time = time.time()
 
 
-def hash_file(filepath, md5=False):
-    """Hash a single file, using sha1 or md5
+def hash_file(filepath):
+    """Hash a single file, using sha1
 
     :param str filepath: Path to the file to be hashed.
-    :param bool md5: Whether or not to use md5 instead of sha1. Default: False
     """
-    if md5:
-        hash_obj = hashlib.md5()
-    else:
-        hash_obj = hashlib.sha1()
+
+    hash_obj = hashlib.sha1()
 
     with open(filepath, 'rb') as f:
         while True:
@@ -57,6 +54,10 @@ def hash_file(filepath, md5=False):
 
 
 def hash_dir(path):
+    """Recursively hash all files in a dir, and concatenate.
+    
+    :param path: The path to the dir to be hashed.
+    """
     hashes = []
 
     for root, dirs, files in os.walk(path):
