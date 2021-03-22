@@ -196,139 +196,24 @@ class SyncSession:
         else:
             return True
 
-    def init_directories(self, root_id, root, dirname, parent_ids):
-        """Create dirs and subdirs based on the path and existing dirs."""
+        game_config = self.local_config['games'][local_index]
+        base_hash = game_config['']
 
-        create_start = time.time()  # TODO: DEBUG
+        if diff_local:
+            current_hash = hash_dir(game_config['path'])
 
-        # Over-commenting because I want to come back and improve this
-        # Dirname = title of folder = d in dirs
-        folder_meta = {'title': dirname, 'mimeType': 'application/vnd.google-apps.folder'}
-        # If the parent of this dir is not the root of the entire gamesave, match the existing parent
-        if root in parent_ids:
-            folder_meta.update(parents=[{'id': parent_ids[root]}])
+            if current_hash == base_hash:
+                return False
+            else:
+                return True
         else:
-            folder_meta.update(parents=[{'id': root_id}])  # Otherwise, create this in the root of the gamesave
+            cloud_config = self.remote_config_handler(index=game_config['cloud_index'])
+            cloud_hash = cloud_config['latest_hash']
 
-        folder = self.drive.CreateFile(folder_meta)
-
-        folder.Upload()
-        create_end = time.time()  # TODO: DEBUG
-        print(f"That folder took {create_end - create_start}")  # TODO: DEBUG
-
-        return {os.path.join(root, dirname): folder['id']}  # Return the ID for use as a parent dir later
-
-    def upload_save(self, index):
-        """Create new dirs and overwrite files recursively in a chosen dir"""
-
-        # TODO: VERY IMPORTANT!!!!! ADD ERROR IF THE ROOT DIR DOESN'T EXIST
-        base_t = time.time()  # TODO: DEBUG
-
-        local_config = self.local_config['games'][index]
-        path = local_config['path']
-        cloud_index = local_config['cloud_index']
-        roots = os.path.split(path)
-        sys_root = roots[0]
-        save_root = roots[1]
-        game_config = self.config_handler(index=cloud_index)
-        parent_ids = game_config['parent_ids']
-        file_ids = game_config['file_ids']
-        root_id = game_config['root_id']
-
-        # Find locally deleted files and update the cloud
-        # todo: dir_set - parent_ids.keys() | file_set = file_ids.keys()
-        dir_set = {save_root}
-        file_set = set()
-
-        # Save metadata
-        # todo: add time
-        self.config_handler(index=cloud_index, hash=hash_dir(path))
-
-        # TODO: Possibly fix redundancy?
-        if save_root not in parent_ids:
-            parent_ids.update(
-                **self.init_directories(root_id=root_id, root='', dirname=save_root, parent_ids=parent_ids)
-            )
-
-        # Initialize directories. If the directory is already present on the cloud ['parent_ids'], it is ignored.
-        for root, dirs, files in os.walk(path):
-            relative_root = root.replace(sys_root, '')[1:]
-            for d in dirs:
-                dir_set.add(os.path.join(relative_root, d))
-
-                if os.path.join(relative_root, d) not in parent_ids:
-                    dir_kwargs = {'root_id': self.config_handler(index=cloud_index)['root_id'],
-                                  'root': relative_root,
-                                  'dirname': d,
-                                  'parent_ids': parent_ids}
-
-                    parent_ids.update(**self.init_directories(**dir_kwargs))
-
-        # Delete dirs not present locally
-        deleted_dirs = parent_ids.keys() - dir_set
-        for del_dir in deleted_dirs:
-            i = game_config['parent_ids'].pop(del_dir)
-            dir_file = self.drive.CreateFile({'id': i})
-            try:
-                t = time.time()  # TODO: DEBUG
-                dir_file.Delete()
-                end_t = time.time()  # TODO: DEBUG
-                print(f"[{end_t - t} secs] Deleted dir '{dir_file['title']}'")  # TODO: DEBUG
-            except ApiRequestError:
-                pass
-
-        # Upload/update files. If the file already exists on the cloud ['file_ids'], overwrite it.
-        for root, dirs, files in os.walk(path):
-            relative_root = root.replace(sys_root, '')[1:]
-            for f in files:
-                t = time.time()  # TODO: DEBUG
-
-                filepath = os.path.join(relative_root, f)
-                file_set.add(filepath)
-
-                if filepath in file_ids:
-                    file_meta = {'id': file_ids[filepath]}
-                else:
-                    file_meta = {'title': f, 'parents': [{'id': parent_ids[relative_root]}]}
-
-                fileitem = self.drive.CreateFile(file_meta)
-
-                if filepath in file_ids:
-                    cloudfile_hash = fileitem['md5Checksum']
-                    localfile_hash = hash_file(os.path.join(root, f), md5=True)
-
-                    if cloudfile_hash == localfile_hash:
-                        continue
-                    else:
-                        print("Overwriting file... ", end='')  # TODO: DEBUG
-
-                fileitem.SetContentFile(os.path.join(root, f))
-                fileitem.Upload()
-                new_data = {filepath: fileitem['id']}
-                file_ids.update(**new_data)
-
-                end_t = time.time()
-
-                print(f"[{end_t - t} secs] Wrote to file: '{fileitem['title']}'")  # TODO: DEBUG
-
-        # Delete files not present locally
-        deleted_files = file_ids.keys() - file_set
-        for del_file in deleted_files:
-            i = game_config['file_ids'].pop(del_file)
-            cloud_file = self.drive.CreateFile({'id': i})
-            try:
-                t = time.time()  # TODO: DEBUG
-                cloud_file.Delete()
-                end_t = time.time()  # TODO: DEBUG
-                print(f"[{end_t - t} secs] Deleted file '{cloud_file['title']}'")  # TODO: DEBUG
-            except ApiRequestError:
-                pass
-
-        self.config_handler(index=index, file_ids=file_ids, parent_ids=parent_ids)
-
-        end_base_t = time.time()  # TODO: DEBUG
-
-        print(f"That upload took {end_base_t - base_t} seconds")  # TODO: DEBUG
+            if cloud_hash == base_hash:
+                return False
+            else:
+                return True
 
     def add_game_entry(self, name):
         self.config_handler(name=name, parent_ids={}, file_ids={})
