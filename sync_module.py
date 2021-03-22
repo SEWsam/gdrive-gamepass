@@ -201,7 +201,7 @@ class SyncSession:
         """
 
         game_config = self.local_config['games'][local_index]
-        base_hash = game_config['']
+        base_hash = game_config['base_hash']
 
         if diff_local:
             current_hash = hash_dir(game_config['path'])
