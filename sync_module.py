@@ -217,6 +217,9 @@ class SyncSession:
     def upload_save(self, index):
         """Create new dirs and overwrite files recursively in a chosen dir"""
 
+        # TODO: VERY IMPORTANT!!!!! ADD ERROR IF THE ROOT DIR DOESN'T EXIST
+        base_t = time.time()  # TODO: DEBUG
+
         local_config = self.local_config['games'][index]
         path = local_config['path']
         cloud_index = local_config['cloud_index']
@@ -263,15 +266,19 @@ class SyncSession:
             i = game_config['parent_ids'].pop(del_dir)
             dir_file = self.drive.CreateFile({'id': i})
             try:
+                t = time.time()  # TODO: DEBUG
                 dir_file.Delete()
+                end_t = time.time()  # TODO: DEBUG
+                print(f"[{end_t - t} secs] Deleted dir '{dir_file['title']}'")  # TODO: DEBUG
             except ApiRequestError:
                 pass
 
         # Upload/update files. If the file already exists on the cloud ['file_ids'], overwrite it.
-        # TODO: Detect removed files
         for root, dirs, files in os.walk(path):
             relative_root = root.replace(sys_root, '')[1:]
             for f in files:
+                t = time.time()  # TODO: DEBUG
+
                 filepath = os.path.join(relative_root, f)
                 file_set.add(filepath)
 
@@ -287,24 +294,37 @@ class SyncSession:
                     localfile_hash = hash_file(os.path.join(root, f), md5=True)
 
                     if cloudfile_hash == localfile_hash:
-                        return
+                        continue
+                    else:
+                        print("Overwriting file... ", end='')  # TODO: DEBUG
 
                 fileitem.SetContentFile(os.path.join(root, f))
                 fileitem.Upload()
                 new_data = {filepath: fileitem['id']}
                 file_ids.update(**new_data)
 
+                end_t = time.time()
+
+                print(f"[{end_t - t} secs] Wrote to file: '{fileitem['title']}'")  # TODO: DEBUG
+
         # Delete files not present locally
         deleted_files = file_ids.keys() - file_set
         for del_file in deleted_files:
             i = game_config['file_ids'].pop(del_file)
-            dir_file = self.drive.CreateFile({'id': i})
+            cloud_file = self.drive.CreateFile({'id': i})
             try:
-                dir_file.Delete()
+                t = time.time()  # TODO: DEBUG
+                cloud_file.Delete()
+                end_t = time.time()  # TODO: DEBUG
+                print(f"[{end_t - t} secs] Deleted file '{cloud_file['title']}'")  # TODO: DEBUG
             except ApiRequestError:
                 pass
 
         self.config_handler(index=index, file_ids=file_ids, parent_ids=parent_ids)
+
+        end_base_t = time.time()  # TODO: DEBUG
+
+        print(f"That upload took {end_base_t - base_t} seconds")  # TODO: DEBUG
 
     def add_game_entry(self, name):
         self.config_handler(name=name, parent_ids={}, file_ids={})
