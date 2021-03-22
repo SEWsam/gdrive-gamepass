@@ -1,5 +1,7 @@
 """ui.py - UI interface for sync_module.
 
+`Systray app solution <https://evileg.com/en/post/68/>`_
+
 ----------------
 COPYRIGHT NOTICE
 ----------------
@@ -22,7 +24,7 @@ import os
 import PyQt5
 import sys
 
-from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QFileDialog, QAction, QMenu, qApp, QSystemTrayIcon, QStyle
 import sync_module
 from PyQt5 import QtWidgets, uic, QtCore
 from PyQt5.QtCore import QRunnable
@@ -31,7 +33,7 @@ from PyQt5.QtCore import QRunnable
 class Custom(QtWidgets.QDialog):
     def __init__(self, parent):
         super(Custom, self).__init__(parent)
-        self.parent = parent
+        self.app = parent.app
         self.setWindowModality(QtCore.Qt.ApplicationModal)
 
         uic.loadUi('UI/custom.ui', self)
@@ -47,7 +49,7 @@ class Custom(QtWidgets.QDialog):
 class AddGame(QtWidgets.QDialog):
     def __init__(self, parent):
         super(AddGame, self).__init__(parent)
-        self.parent = parent
+        self.app = parent.app
         self.setWindowModality(QtCore.Qt.ApplicationModal)
 
         uic.loadUi('UI/add_game.ui', self)
@@ -70,7 +72,7 @@ class AddGame(QtWidgets.QDialog):
 class GameList(QtWidgets.QDialog):
     def __init__(self, parent):
         super(GameList, self).__init__(parent)
-        self.parent = parent
+        self.app = parent
         self.setWindowModality(QtCore.Qt.ApplicationModal)
 
         uic.loadUi('UI/game_list.ui', self)
@@ -98,7 +100,32 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.game_list.clicked.connect(self.show_game_list)
 
+        # Systray icon
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.style().standardIcon(QStyle.SP_ComputerIcon))
+
+        show_action = QAction("Show", self)
+        quit_action = QAction("Exit", self)
+        show_action.triggered.connect(self.show)
+        quit_action.triggered.connect(qApp.quit)
+        tray_menu = QMenu()
+        tray_menu.addAction(show_action)
+        tray_menu.addAction(quit_action)
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.show()
+
         self.show()
+
+    def closeEvent(self, event):
+        """Minimize to systray, forcing user to close from systray icon"""
+        event.ignore()
+        self.hide()
+        self.tray_icon.showMessage(
+            "GDrive Game Sync",
+            "Minimized to Tray",
+            QSystemTrayIcon.Information,
+            2000
+        )
 
     def show_game_list(self):
         GameList(self)
