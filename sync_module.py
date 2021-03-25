@@ -23,6 +23,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
 import hashlib
 # from datetime import datetime
+import random
+from typing import Callable
 import json
 import os
 import shutil
@@ -34,6 +36,10 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 
 start_time = time.time()
+
+# Create a custom logger
+sync_logger = logging.getLogger(__name__)
+sync_logger.setLevel('DEBUG')
 
 
 def hash_file(filepath):
@@ -89,9 +95,14 @@ class SyncSession:
     - base version: The origin save archive that the local save is based on.
     """
 
-    def __init__(self):
+    def __init__(self, thread_reporter=lambda x: x):
+        """
+        :param Callable thread_reporter: Callable object to pass percent progress reports to. Defaults to 'lambda x: x'
+        """
+
+        self.thread_reporter = thread_reporter
         self.drive = None
-        self.save_folder = None
+        self.app_folder = None
         self.app_config = None
         with open('settings.json', 'r') as f:
             self.local_config = json.load(f)
@@ -142,19 +153,21 @@ class SyncSession:
 
         return return_value
 
-    def initialize_gdrive(self, original):
+    def initialize_gdrive(self, original=None):
         """Initialize App in Google Drive; create app folder and config.
 
         :param original: Preexisting app folder if applicable.
         """
 
-        self.save_folder = original or self.drive.CreateFile(
+        sync_logger.info("Initializing Google Drive app")
+
+        self.app_folder = original or self.drive.CreateFile(
             {'title': 'Gamepass Saves', 'mimeType': 'application/vnd.google-apps.folder'}
         )
-        self.save_folder.Upload()
+        self.app_folder.Upload()
 
         self.app_config = self.drive.CreateFile(
-            {'title': 'config.json', 'mimeType': 'application/json', 'parents': [{'id': self.save_folder['id']}]}
+            {'title': 'config.json', 'mimeType': 'application/json', 'parents': [{'id': self.app_folder['id']}]}
         )
         self.app_config.SetContentString('{"base_revision": 0, "games": []}')
         self.app_config.Upload()
@@ -164,33 +177,50 @@ class SyncSession:
 
         # The settings used allow app-only files to be changed, and credentials are saved
         gauth = GoogleAuth(settings_file='authentication/settings.yaml')
+        sync_logger.debug("Loaded config file")
+
         gauth.LoadCredentialsFile()
+        sync_logger.debug(f"Loaded Credentials: {gauth.credentials}")
+
+        if gauth.credentials is None:
+            sync_logger.warning("Login Required. Opening browser momentarily.")
+            time.sleep(2)
 
         self.drive = GoogleDrive(gauth)
+        sync_logger.debug("Created GoogleDrive instance")
 
-        folders = self.drive.ListFile(
-            {"q": "'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"}
-        ).GetList()
+        query = "'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        folder_search = self.drive.ListFile({"q": query}).GetList()
+        sync_logger.debug(f"Searched with query: {query}")
 
-        for i in folders:
+        if not folder_search:
+            sync_logger.debug("Could not locate app folder.")
+            self.initialize_gdrive()
+            return
+
+        for i in folder_search:
             if i['title'] == 'Gamepass Saves':
-                self.save_folder = i
+                self.app_folder = i
+                sync_logger.debug("Located app folder.")
                 break
 
-        app_data = self.drive.ListFile(
-            {"q": f"'{self.save_folder['id']}' in parents and mimeType='application/json' and trashed=false"}
-        ).GetList()
+        query = f"'{self.app_folder['id']}' in parents and mimeType='application/json' and trashed=false"
+        config_search = self.drive.ListFile({"q": query}).GetList()
+        sync_logger.debug(f"Searched with query: {query}")
 
-        for i in app_data:
+        if not config_search:
+            sync_logger.debug("Could not locate app config.")
+            self.initialize_gdrive(self.app_folder)
+            return
+
+        for i in config_search:
             if i['title'] == 'config.json':
                 self.app_config = i
+                sync_logger.debug("Located app config")
                 break
 
-        if self.app_config is None:
-            self.initialize_gdrive(self.save_folder)
-
-        print(self.save_folder['id'])
-        print(self.app_config['id'])
+        sync_logger.debug(f"App folder ID: {self.app_folder['id']}")
+        sync_logger.debug(f"App config ID: {self.app_config['id']}")
 
     def diff(self, local_index, diff_local=True):
         """Determine whether the current save has changed locally or if it differs from the remote gamesave
@@ -227,7 +257,7 @@ class SyncSession:
             {
                 'title': f"{name}_{len(self.remote_config_handler()) - 1}",
                 'mimeType': 'application/vnd.google-apps.folder',
-                'parents': [{'id': self.save_folder['id']}]
+                'parents': [{'id': self.app_folder['id']}]
             }
         )
         save_root.Upload()
@@ -255,6 +285,8 @@ class SyncSession:
         save_path = local_config['path']
         cloud_index = local_config['cloud_index']
 
+        sync_logger.info(f"Pushing {game_name}")
+
         game_config = self.remote_config_handler(index=cloud_index)
         root_id = game_config['root_id']
 
@@ -263,15 +295,19 @@ class SyncSession:
         game_config['latest_hash'] = save_hash
         local_config['base_hash'] = save_hash
 
+        self.thread_reporter(n=25)
+
         tar_time = time.time()
-        print("tarring")
+        print(str(self.local_config) + " tarring " + str(local_index))
 
         archive_name = f'{game_name}_{cloud_index}-{time.time()}.save.tar'  # foo_0-000000000...save.txz
-        with tarfile.open('temp/' + archive_name, 'w') as tar:
+        with tarfile.open('temp/' + archive_name, 'w:') as tar:
             tar.add(save_path, arcname=os.path.basename(save_path))
 
+        self.thread_reporter(n=50)
+
         end_tar_time = time.time()
-        print(f'The tarring took {end_tar_time - tar_time} seconds')
+        sync_logger.info(f'The tarring took {end_tar_time - tar_time} seconds ' + str(local_index))
 
         upload_time = time.time()
 
@@ -281,19 +317,23 @@ class SyncSession:
         fileitem.Upload()
         fileitem.content.close()
 
-        end_upload = time.time()
-        print(f'the upload took {end_upload - upload_time} seconds')
+        self.thread_reporter(n=75)
 
-        os.remove('temp/' + archive_name)
+        end_upload = time.time()
+        sync_logger.info(f'the upload took {end_upload - upload_time} seconds ' + str(local_index))
+
+        # os.remove('temp/' + archive_name)
 
         game_config['saves'].append(fileitem['id'])
         self.local_config['games'][local_index] = local_config
         self.update_local_config()
         self.remote_config_handler(index=cloud_index, **game_config)
 
+        self.thread_reporter(n=100)
+
         end_push = time.time()
 
-        print(f'The entire push took {end_push - push_time} seconds.')
+        sync_logger.info(f'The entire push took {end_push - push_time} seconds. ' + str(local_index))
 
     def pull(self, local_index, save_index=-1):
         """Download and extract a game save
@@ -315,9 +355,11 @@ class SyncSession:
         fileitem = self.drive.CreateFile({'id': save_id})
 
         fileitem.GetContentFile('temp/' + fileitem['title'])
+        sync_logger.info("Downloading: " + str(local_index))
         shutil.rmtree(save_path)
         with tarfile.open('temp/' + fileitem['title'], 'r') as tar:
             tar.extractall(extract_path)
+        sync_logger.info("Extracting: " + str(local_index))
 
         os.remove('temp/' + fileitem['title'])
 
@@ -328,23 +370,39 @@ class SyncSession:
 
         :param int local_index: The index of the game config in the local settings.
         """
-        local_config = self.local_config[local_index]
-        saves_list = self.remote_config_handler(idnex=self.remote_config_handler(index=local_config['cloud_index']))
+        local_config = self.local_config['games'][local_index]
+        saves_list = self.remote_config_handler(index=local_config['cloud_index'])
 
         if self.diff(local_index) and self.diff(local_index, diff_local=False):
             # Changes made locally, changes made remotely (conflict)
+            sync_logger.info("Conflict " + str(local_index))
             return saves_list
         elif not self.diff(local_index) and self.diff(local_index, diff_local=False):
             # No changes locally, changes made remotely (pull)
-            print('pull')
+            sync_logger.info("Pulling " + str(local_index))
             self.pull(local_index)
+            sync_logger.info("Pulled" + str(local_index))
         elif self.diff(local_index) and not self.diff(local_index, diff_local=False):
             # Changes made locally, no changes remotely (push)
-            print('push')
+            sync_logger.info("Pushing " + str(local_index))
             self.push(local_index)
+            sync_logger.info("Pushed" + str(local_index))
         else:
             # No changes on local or remote end
+            sync_logger.info("Nothing" + str(local_index))
+            self.thread_reporter(n=100)  # TODO: This is the bug lol
             pass  # TODO: Log this
+
+    def testmeth(self):
+        sync_logger.info('Testing method@ ' + str(time.time()))
+        time.sleep(float(random.randint(1, 3)))
+        self.thread_reporter(25)
+        time.sleep(float(random.randint(1, 3)))
+        self.thread_reporter(50)
+        time.sleep(float(random.randint(1, 3)))
+        self.thread_reporter(75)
+        time.sleep(float(random.randint(1, 3)))
+        self.thread_reporter(100)
 
 
 # TODO: NOTE: code below gets time:
@@ -353,11 +411,11 @@ timestamp = name.split('-')[-1]
 save_time = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %I:%M:%S %p')
 """
 #
-session = SyncSession()
-session.authenticate()
-# session.add_game_entry('Prey')
-# session.enable_game_entry(0, 'C:\\Users\\ponch\\Saved Games\\Arkane Studios\\Prey_MS\\SaveGames')
-session.sync(0)
+# session = SyncSession()
+# session.authenticate()
+# # session.add_game_entry('Prey')
+# # session.enable_game_entry(0, 'C:\\Users\\ponch\\Saved Games\\Arkane Studios\\Prey_MS\\SaveGames')
+# session.sync(0)
 
 end_time = time.time()
 
