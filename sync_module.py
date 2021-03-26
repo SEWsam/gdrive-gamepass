@@ -251,7 +251,7 @@ class SyncSession:
                 return True
 
     def add_game_entry(self, name):
-        self.remote_config_handler(name=name, saves=[], latest_hash='')
+        self.remote_config_handler(name=name, saves=[], latest_hash='da39a3ee5e6b4b0d3255bfef95601890afd80709')
 
         save_root = self.drive.CreateFile(
             {
