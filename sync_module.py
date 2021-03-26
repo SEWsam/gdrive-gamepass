@@ -100,7 +100,7 @@ class SyncSession:
         :param Callable thread_reporter: Callable object to pass percent progress reports to. Defaults to 'lambda x: x'
         """
 
-        self.thread_reporter = thread_reporter
+        # self.thread_reporter = thread_reporter
         self.drive = None
         self.app_folder = None
         self.app_config = None
@@ -266,7 +266,8 @@ class SyncSession:
 
     def enable_game_entry(self, cloud_index, path):
         game_entry = self.remote_config_handler(index=cloud_index)
-        local_entry = {'name': game_entry['name'], 'cloud_index': cloud_index, 'path': path, 'base_hash': ''}
+        local_entry = {'name': game_entry['name'], 'cloud_index': cloud_index,
+                       'path': path, 'base_hash': 'da39a3ee5e6b4b0d3255bfef95601890afd80709'}
 
         self.local_config['games'].append(local_entry)
         self.update_local_config()
@@ -295,7 +296,7 @@ class SyncSession:
         game_config['latest_hash'] = save_hash
         local_config['base_hash'] = save_hash
 
-        self.thread_reporter(n=25)
+        # self.thread_reporter(n=25)
 
         tar_time = time.time()
         print(str(self.local_config) + " tarring " + str(local_index))
@@ -304,7 +305,7 @@ class SyncSession:
         with tarfile.open('temp/' + archive_name, 'w:') as tar:
             tar.add(save_path, arcname=os.path.basename(save_path))
 
-        self.thread_reporter(n=50)
+        # self.thread_reporter(n=50)
 
         end_tar_time = time.time()
         sync_logger.info(f'The tarring took {end_tar_time - tar_time} seconds ' + str(local_index))
@@ -317,7 +318,7 @@ class SyncSession:
         fileitem.Upload()
         fileitem.content.close()
 
-        self.thread_reporter(n=75)
+        # self.thread_reporter(n=75)
 
         end_upload = time.time()
         sync_logger.info(f'the upload took {end_upload - upload_time} seconds ' + str(local_index))
@@ -329,7 +330,7 @@ class SyncSession:
         self.update_local_config()
         self.remote_config_handler(index=cloud_index, **game_config)
 
-        self.thread_reporter(n=100)
+        # self.thread_reporter(n=100)
 
         end_push = time.time()
 
@@ -390,19 +391,19 @@ class SyncSession:
         else:
             # No changes on local or remote end
             sync_logger.info("Nothing" + str(local_index))
-            self.thread_reporter(n=100)  # TODO: This is the bug lol
+            # self.thread_reporter(n=100, i=local_index)  # TODO: This is the bug lol
             pass  # TODO: Log this
 
     def testmeth(self):
         sync_logger.info('Testing method@ ' + str(time.time()))
         time.sleep(float(random.randint(1, 3)))
-        self.thread_reporter(25)
+        # self.thread_reporter(25)
         time.sleep(float(random.randint(1, 3)))
-        self.thread_reporter(50)
+        # self.thread_reporter(50)
         time.sleep(float(random.randint(1, 3)))
-        self.thread_reporter(75)
+        # self.thread_reporter(75)
         time.sleep(float(random.randint(1, 3)))
-        self.thread_reporter(100)
+        # self.thread_reporter(100)
 
 
 # TODO: NOTE: code below gets time:

@@ -45,6 +45,7 @@ class WorkerSignals(QObject):
     The above defined signals are all :class:`PyQt5.QtCore.pyqtSignal` objects.
     """
 
+    progress = pyqtSignal(int, int)
     finished = pyqtSignal()
     error = pyqtSignal(tuple)
     result = pyqtSignal(object)
@@ -65,6 +66,8 @@ class Worker(QRunnable):
         self.args = args
         self.kwargs = kwargs
         self.signals = WorkerSignals()
+
+    
 
     @pyqtSlot()
     def run(self):
@@ -255,13 +258,14 @@ class MainWindow(QtWidgets.QMainWindow):
             if not isinstance(i, QtWidgets.QStatusBar) or not isinstance(i, QtWidgets.QProgressBar):
                 i.setEnabled(x)
 
-    def report_progress(self, n=0, reset=False):
+    def report_progress(self, n=0, i=0, reset=False):
         """Support thread_reporter callback for sync_module. Reports to the progress bar.
 
         Uniquely identifies each task by thread ID so progress values can be maintained across
         consecutive tasks.
 
         :param int n: The progress percent as an integer for the caller.
+        :param int i: The current iteration of the consecutive sync calls.
         :param bool reset: Reset the progress bar.
         """
 
@@ -269,8 +273,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # jsut make the id thing be done api level.
 
         if not reset:
-            current_worker = self.thread_queue
-            progress_data = {str(current_thread): n}
+            progress_data = {str(i): n}
             self.threads_progress.update(progress_data)
 
             progress_value = 0
@@ -294,7 +297,6 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.end_time = time.time()
             self.allow_usr_input(True)
-            self.report_progress(reset=True)
             QApplication.beep()
             sync_logger.info("All games synced!")
             sync_logger.info(f"All games took {self.end_time - self.start_time} seconds")  # TODO: debug
