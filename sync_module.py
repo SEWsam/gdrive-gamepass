@@ -37,9 +37,7 @@ from pydrive2.drive import GoogleDrive
 
 start_time = time.time()
 
-# Create a custom logger
-sync_logger = logging.getLogger(__name__)
-sync_logger.setLevel('DEBUG')
+logger = logging.getLogger(__name__)
 
 
 def hash_file(filepath):
@@ -95,12 +93,8 @@ class SyncSession:
     - base version: The origin save archive that the local save is based on.
     """
 
-    def __init__(self, thread_reporter=lambda x: x):
-        """
-        :param Callable thread_reporter: Callable object to pass percent progress reports to. Defaults to 'lambda x: x'
-        """
+    def __init__(self):
 
-        # self.thread_reporter = thread_reporter
         self.drive = None
         self.app_folder = None
         self.app_config = None
@@ -159,7 +153,7 @@ class SyncSession:
         :param original: Preexisting app folder if applicable.
         """
 
-        sync_logger.info("Initializing Google Drive app")
+        logger.info("Initializing Google Drive app")
 
         self.app_folder = original or self.drive.CreateFile(
             {'title': 'Gamepass Saves', 'mimeType': 'application/vnd.google-apps.folder'}
@@ -177,50 +171,50 @@ class SyncSession:
 
         # The settings used allow app-only files to be changed, and credentials are saved
         gauth = GoogleAuth(settings_file='authentication/settings.yaml')
-        sync_logger.debug("Loaded config file")
+        logger.debug("Loaded config file")
 
         gauth.LoadCredentialsFile()
-        sync_logger.debug(f"Loaded Credentials: {gauth.credentials}")
+        logger.debug(f"Loaded Credentials: {gauth.credentials}")
 
         if gauth.credentials is None:
-            sync_logger.warning("Login Required. Opening browser momentarily.")
+            logger.warning("Login Required. Opening browser momentarily.")
             time.sleep(2)
 
         self.drive = GoogleDrive(gauth)
-        sync_logger.debug("Created GoogleDrive instance")
+        logger.debug("Created GoogleDrive instance")
 
         query = "'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
         folder_search = self.drive.ListFile({"q": query}).GetList()
-        sync_logger.debug(f"Searched with query: {query}")
+        logger.debug(f"Searched with query: {query}")
 
         if not folder_search:
-            sync_logger.debug("Could not locate app folder.")
+            logger.debug("Could not locate app folder.")
             self.initialize_gdrive()
             return
 
         for i in folder_search:
             if i['title'] == 'Gamepass Saves':
                 self.app_folder = i
-                sync_logger.debug("Located app folder.")
+                logger.debug("Located app folder.")
                 break
 
         query = f"'{self.app_folder['id']}' in parents and mimeType='application/json' and trashed=false"
         config_search = self.drive.ListFile({"q": query}).GetList()
-        sync_logger.debug(f"Searched with query: {query}")
+        logger.debug(f"Searched with query: {query}")
 
         if not config_search:
-            sync_logger.debug("Could not locate app config.")
+            logger.debug("Could not locate app config.")
             self.initialize_gdrive(self.app_folder)
             return
 
         for i in config_search:
             if i['title'] == 'config.json':
                 self.app_config = i
-                sync_logger.debug("Located app config")
+                logger.debug("Located app config")
                 break
 
-        sync_logger.debug(f"App folder ID: {self.app_folder['id']}")
-        sync_logger.debug(f"App config ID: {self.app_config['id']}")
+        logger.debug(f"App folder ID: {self.app_folder['id']}")
+        logger.debug(f"App config ID: {self.app_config['id']}")
 
     def diff(self, local_index, diff_local=True):
         """Determine whether the current save has changed locally or if it differs from the remote gamesave
@@ -272,10 +266,11 @@ class SyncSession:
         self.local_config['games'].append(local_entry)
         self.update_local_config()
 
-    def push(self, local_index):
+    def push(self, local_index, progress_callback=lambda *x: None):
         """Upload saves as tarballs, keeping a history of saves
 
         :param local_index: The index of the game config in the local settings.
+        :param progress_callback: Callback object for progress: Callable(progress: int, local_index: int)
         """
 
         push_time = time.time()
@@ -286,7 +281,7 @@ class SyncSession:
         save_path = local_config['path']
         cloud_index = local_config['cloud_index']
 
-        sync_logger.info(f"Pushing {game_name}")
+        logger.info(f"Pushing {game_name}")
 
         game_config = self.remote_config_handler(index=cloud_index)
         root_id = game_config['root_id']
@@ -296,7 +291,6 @@ class SyncSession:
         game_config['latest_hash'] = save_hash
         local_config['base_hash'] = save_hash
 
-        # self.thread_reporter(n=25)
 
         tar_time = time.time()
         print(str(self.local_config) + " tarring " + str(local_index))
@@ -305,10 +299,9 @@ class SyncSession:
         with tarfile.open('temp/' + archive_name, 'w:') as tar:
             tar.add(save_path, arcname=os.path.basename(save_path))
 
-        # self.thread_reporter(n=50)
 
         end_tar_time = time.time()
-        sync_logger.info(f'The tarring took {end_tar_time - tar_time} seconds ' + str(local_index))
+        logger.info(f'The tarring took {end_tar_time - tar_time} seconds ' + str(local_index))
 
         upload_time = time.time()
 
@@ -318,10 +311,9 @@ class SyncSession:
         fileitem.Upload()
         fileitem.content.close()
 
-        # self.thread_reporter(n=75)
 
         end_upload = time.time()
-        sync_logger.info(f'the upload took {end_upload - upload_time} seconds ' + str(local_index))
+        logger.info(f'the upload took {end_upload - upload_time} seconds ' + str(local_index))
 
         # os.remove('temp/' + archive_name)
 
@@ -330,17 +322,17 @@ class SyncSession:
         self.update_local_config()
         self.remote_config_handler(index=cloud_index, **game_config)
 
-        # self.thread_reporter(n=100)
 
         end_push = time.time()
 
-        sync_logger.info(f'The entire push took {end_push - push_time} seconds. ' + str(local_index))
+        logger.info(f'The entire push took {end_push - push_time} seconds. ' + str(local_index))
 
-    def pull(self, local_index, save_index=-1):
+    def pull(self, local_index, save_index=-1, progress_callback=lambda *x: None):
         """Download and extract a game save
 
         :param int local_index: The index of the local game config
         :param int save_index: The index of the save in the 'saves' list on the cloud. Defaults to -1.
+        :param progress_callback: Callback object for progress: Callable(progress: int, local_index: int)
         """
 
         # Data we will be using
@@ -356,54 +348,53 @@ class SyncSession:
         fileitem = self.drive.CreateFile({'id': save_id})
 
         fileitem.GetContentFile('temp/' + fileitem['title'])
-        sync_logger.info("Downloading: " + str(local_index))
+        logger.info("Downloading: " + str(local_index))
         shutil.rmtree(save_path)
         with tarfile.open('temp/' + fileitem['title'], 'r') as tar:
             tar.extractall(extract_path)
-        sync_logger.info("Extracting: " + str(local_index))
+        logger.info("Extracting: " + str(local_index))
 
         os.remove('temp/' + fileitem['title'])
 
         self.update_local_config()
 
-    def sync(self, local_index):
+    def sync(self, local_index, progress_callback=lambda *x: None):
         """Sync changes using the newest possible revision
 
         :param int local_index: The index of the game config in the local settings.
+        :param progress_callback: Callback object for progress: Callable(progress: int, local_index: int).
+                                  Passed to push() and pull() methods.
         """
+
         local_config = self.local_config['games'][local_index]
         saves_list = self.remote_config_handler(index=local_config['cloud_index'])
 
         if self.diff(local_index) and self.diff(local_index, diff_local=False):
             # Changes made locally, changes made remotely (conflict)
-            sync_logger.info("Conflict " + str(local_index))
+            logger.info("Conflict " + str(local_index))
             return saves_list
         elif not self.diff(local_index) and self.diff(local_index, diff_local=False):
             # No changes locally, changes made remotely (pull)
-            sync_logger.info("Pulling " + str(local_index))
-            self.pull(local_index)
-            sync_logger.info("Pulled" + str(local_index))
+            logger.info("Pulling " + str(local_index))
+            self.pull(local_index, progress_callback=progress_callback)
+            logger.info("Pulled" + str(local_index))
         elif self.diff(local_index) and not self.diff(local_index, diff_local=False):
             # Changes made locally, no changes remotely (push)
-            sync_logger.info("Pushing " + str(local_index))
-            self.push(local_index)
-            sync_logger.info("Pushed" + str(local_index))
+            logger.info("Pushing " + str(local_index))
+            self.push(local_index, progress_callback=progress_callback)
+            logger.info("Pushed" + str(local_index))
         else:
             # No changes on local or remote end
-            sync_logger.info("Nothing" + str(local_index))
-            # self.thread_reporter(n=100, i=local_index)  # TODO: This is the bug lol
+            logger.info("Nothing" + str(local_index))
             pass  # TODO: Log this
 
     def testmeth(self):
-        sync_logger.info('Testing method@ ' + str(time.time()))
+        logger.info('Testing method@ ' + str(time.time()))
+        logger.debug('bruh')
         time.sleep(float(random.randint(1, 3)))
-        # self.thread_reporter(25)
         time.sleep(float(random.randint(1, 3)))
-        # self.thread_reporter(50)
         time.sleep(float(random.randint(1, 3)))
-        # self.thread_reporter(75)
         time.sleep(float(random.randint(1, 3)))
-        # self.thread_reporter(100)
 
 
 # TODO: NOTE: code below gets time:

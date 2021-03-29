@@ -29,7 +29,7 @@ import PyQt5
 import sys
 
 from PyQt5.QtWidgets import QFileDialog, QAction, QMenu, qApp, QSystemTrayIcon, QStyle, QApplication
-from sync_module import SyncSession, sync_logger
+from sync_module import SyncSession
 from PyQt5 import QtWidgets, uic, QtCore
 from PyQt5.QtCore import QRunnable, pyqtSlot, QThreadPool, QThread, QObject, pyqtSignal
 
@@ -67,8 +67,6 @@ class Worker(QRunnable):
         self.kwargs = kwargs
         self.signals = WorkerSignals()
 
-    
-
     @pyqtSlot()
     def run(self):
         """Initialize runner function; pass args and kwargs."""
@@ -82,16 +80,6 @@ class Worker(QRunnable):
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
             self.signals.finished.emit()  # Done
-
-
-class StatusBarLogger(logging.Handler):
-    def __init__(self, parent):
-        super(StatusBarLogger, self).__init__()
-        self.parent = parent
-
-    def emit(self, record):
-        msg = self.format(record)
-        self.parent.status_bar.showMessage(msg)
 
 
 class Custom(QtWidgets.QDialog):
@@ -191,7 +179,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # endregion
 
         # region Initialize API
-        self.session = SyncSession(self.report_progress)
+        self.session = SyncSession()
         self.settings = self.session.local_config  # Make this more readable.
         self.update_settings = self.session.update_local_config
         # endregion
@@ -206,18 +194,10 @@ class MainWindow(QtWidgets.QMainWindow):
         print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
         # endregion
 
-        # region Logging
-        base_handler = StatusBarLogger(self)
-        base_handler.setLevel(logging.INFO)
-        base_format = logging.Formatter('%(message)s')
-        base_handler.setFormatter(base_format)
-        sync_logger.addHandler(base_handler)
-        # endregion
-
         self.show()
 
         # region Login to google
-        worker = Worker(self.authenticate)
+        worker = Worker(self.login)
         self.thread_starter(worker)
 
     def closeEvent(self, event):
@@ -298,8 +278,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.end_time = time.time()
             self.allow_usr_input(True)
             QApplication.beep()
-            sync_logger.info("All games synced!")
-            sync_logger.info(f"All games took {self.end_time - self.start_time} seconds")  # TODO: debug
+            logger.info("All games synced!")
+            logger.info(f"All games took {self.end_time - self.start_time} seconds")  # TODO: debug
 
     def consecutive_save_sync(self):
         """Sync games saves with SyncSession.sync, consecutively.
@@ -309,7 +289,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.allow_usr_input(False)
         self.start_time = time.time()
-        sync_logger.info("Syncing...")
+        logger.info("Syncing...")
 
         initial_worker = None
         for i, game in enumerate(self.settings['games']):
@@ -324,24 +304,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.task_count = len(self.thread_queue) + 1
         self.threadpool.start(initial_worker)
 
-    def authenticate(self):
+    def login(self):
         self.quit_action.setEnabled(False)
 
-        sync_logger.info("Logging in...")
+        logger.info("Logging in...")
         self.session.authenticate()
-        sync_logger.info("Success authenticating!")
+        logger.info("Success authenticating!")
 
         self.quit_action.setEnabled(True)
         self.allow_usr_input(True)
 
     def thread_starter(self, worker):
-        sync_logger.debug(f"Starting worker thread with callable '{worker.fn}'. Args: {worker.args}, {worker.kwargs}")
+        logger.debug(f"Starting worker thread with callable '{worker.fn}'. Args: {worker.args}, {worker.kwargs}")
         self.threadpool.start(worker)
-        sync_logger.debug(f"Worker started")
-    
+        logger.debug(f"Worker started")
+
     def show_game_list(self):
         self.task_count = 10
-
+        for _ in range(0, 10):
+            worker = Worker(self.session.testmeth)
+            self.thread_starter(worker)
         self.thread_runner(self.session.testmeth)
         self.thread_runner(self.session.testmeth)
         self.thread_runner(self.session.testmeth)
@@ -365,6 +347,5 @@ if hasattr(QtCore.Qt, 'AA_EnableHighDpiScaling'):
 if hasattr(QtCore.Qt, 'AA_UseHighDpiPixmaps'):
     PyQt5.QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps, True)
 
-app = QtWidgets.QApplication(sys.argv)
-window = MainWindow()
-app.exec_()
+logger = logging.getLogger(__name__)
+
