@@ -50,7 +50,7 @@ pyqt_logger.setLevel('ERROR')
 
 log_file_handler = logging.FileHandler(filename='debug.log')
 log_file_handler.setLevel('DEBUG')
-log_file_format = logging.Formatter('%(asctime)s - %(origin)-39s - %(levelname)-8s - %(message)s')
+log_file_format = logging.Formatter('%(asctime)s - %(origin)-40s - %(levelname)-8s - %(message)s')
 log_file_handler.setFormatter(log_file_format)
 root_logger.addHandler(log_file_handler)
 
