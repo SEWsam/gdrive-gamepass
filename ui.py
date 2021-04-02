@@ -315,7 +315,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.allow_usr_input(True)
 
     def thread_starter(self, worker):
-        logger.debug(f"Starting worker thread with callable '{worker.fn}'. Args: {worker.args}, {worker.kwargs}")
+        logger.debug(f"Starting worker thread with callable {worker.fn}. Args: {worker.args}, {worker.kwargs}")
         self.threadpool.start(worker)
         logger.debug(f"Worker started")
 
@@ -324,16 +324,6 @@ class MainWindow(QtWidgets.QMainWindow):
         for _ in range(0, 10):
             worker = Worker(self.session.testmeth)
             self.thread_starter(worker)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
-        self.thread_runner(self.session.testmeth)
 
         # GameList(self)
 
