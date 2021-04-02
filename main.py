@@ -38,6 +38,12 @@ class StatusBarLogger(logging.Handler):
 
     def emit(self, record):
         msg = self.format(record)
+
+        if 'access_token is expired' in msg:
+            msg = msg.replace('access_token is expired', 'Session expired')
+        elif 'Refreshing access_token' in msg:
+            msg = msg.replace('Refreshing access_token', 'Reloading session')
+
         self.parent.status_bar.showMessage(msg)
 
 
