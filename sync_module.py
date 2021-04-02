@@ -345,18 +345,26 @@ class SyncSession:
         save_id = cloud_config['saves'][save_index]
         local_config['base_hash'] = cloud_config['latest_hash']
 
+        progress_callback(25, local_index)
+
         fileitem = self.drive.CreateFile({'id': save_id})
 
-        fileitem.GetContentFile('temp/' + fileitem['title'])
         logger.info("Downloading: " + str(local_index))
+        fileitem.GetContentFile('temp/' + fileitem['title'])
+        progress_callback(50, local_index)
+
         shutil.rmtree(save_path)
+
+        logger.info("Extracting: " + str(local_index))
         with tarfile.open('temp/' + fileitem['title'], 'r') as tar:
             tar.extractall(extract_path)
-        logger.info("Extracting: " + str(local_index))
+
+        progress_callback(75, local_index)
 
         os.remove('temp/' + fileitem['title'])
 
         self.update_local_config()
+        progress_callback(100, local_index)
 
     def sync(self, local_index, progress_callback=lambda *x: None):
         """Sync changes using the newest possible revision
@@ -381,7 +389,7 @@ class SyncSession:
         elif self.diff(local_index) and not self.diff(local_index, diff_local=False):
             # Changes made locally, no changes remotely (push)
             logger.info("Pushing " + str(local_index))
-            self.push(local_index, progress_callback=progress_callback)
+            # self.push(local_index, progress_callback=progress_callback)
             logger.info("Pushed" + str(local_index))
         else:
             # No changes on local or remote end
