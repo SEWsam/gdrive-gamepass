@@ -55,6 +55,8 @@ log_file_handler.setFormatter(log_file_format)
 root_logger.addHandler(log_file_handler)
 
 if __name__ == '__main__':
+    ahhh = logging.root.manager.loggerDict
+
     app = QtWidgets.QApplication(sys.argv)
     window = MainWindow()
 
