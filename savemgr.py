@@ -1,4 +1,4 @@
-"""sync_module.py: Manages local and cloud game saves.
+"""savemgr.py: Manages local and cloud game saves.
 
 `Recursive hashing solution
 <https://stackoverflow.com/questions/36204248/creating-unique-hash-for-directory-in-python>`_
@@ -79,7 +79,7 @@ def hash_dir(path):
     return str(final_hash.hexdigest())
 
 
-class SyncSession:
+class ManagerSession:
     """Integrate with google drive to upload and manage game saves.
     
     ----------------------
@@ -389,11 +389,12 @@ class SyncSession:
         elif self.diff(local_index) and not self.diff(local_index, diff_local=False):
             # Changes made locally, no changes remotely (push)
             logger.info("Pushing " + str(local_index))
-            # self.push(local_index, progress_callback=progress_callback)
+            # self.push(local_index, progress_callback=progress_callback) # TODO: me when the
             logger.info("Pushed" + str(local_index))
         else:
             # No changes on local or remote end
             logger.info("Nothing" + str(local_index))
+            progress_callback(100, local_index)
             pass  # TODO: Log this
 
     def testmeth(self):
@@ -411,7 +412,7 @@ timestamp = name.split('-')[-1]
 save_time = datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d, %I:%M:%S %p')
 """
 #
-# session = SyncSession()
+# session = ManagerSession()
 # session.authenticate()
 # # session.add_game_entry('Prey')
 # # session.enable_game_entry(0, 'C:\\Users\\ponch\\Saved Games\\Arkane Studios\\Prey_MS\\SaveGames')

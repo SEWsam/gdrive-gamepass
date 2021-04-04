@@ -29,8 +29,8 @@ import PyQt5
 import sys
 
 from PyQt5.QtWidgets import QFileDialog, QAction, QMenu, qApp, QSystemTrayIcon, QStyle, QApplication
-from sync_module import SyncSession
-from PyQt5 import QtWidgets, uic, QtCore
+from savemgr import ManagerSession
+from PyQt5 import QtWidgets, uic, QtCore  # noqa
 from PyQt5.QtCore import QRunnable, pyqtSlot, QThreadPool, QThread, QObject, pyqtSignal
 
 
@@ -198,7 +198,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # endregion
 
         # region Initialize API
-        self.session = SyncSession()
+        self.session = ManagerSession()
         self.settings = self.session.local_config  # Make this more readable.
         self.update_settings = self.session.update_local_config
         # endregion
@@ -298,7 +298,7 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.info(f"All games took {self.end_time - self.start_time} seconds")  # TODO: debug
 
     def consecutive_save_sync(self):
-        """Sync games saves with SyncSession.sync, consecutively.
+        """Sync games saves with ManagerSession.sync, consecutively.
 
         Creates a queue of worker threads, each connecting to the sync_queue_delegate on completion.
         """
