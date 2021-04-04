@@ -293,6 +293,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.end_time = time.time()
             self.allow_usr_input(True)
+            self.report_progress(-1, -1)
             QApplication.beep()
             logger.info("All games synced!")
             logger.info(f"All games took {self.end_time - self.start_time} seconds")  # TODO: debug
@@ -309,7 +310,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         initial_worker = None
         for i, game in enumerate(self.settings['games']):
-            worker = Worker(self.session.sync, i)
+            worker = MonitoredWorker('progress_callback', self.session.sync, i)
             worker.signals.finished.connect(self.sync_queue_delegate)
             worker.signals.progress.connect(self.report_progress)
 
