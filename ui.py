@@ -56,12 +56,12 @@ class Worker(QRunnable):
 
     def __init__(self, fn, *args, **kwargs):
         """
-        :param Callable fn: The function callback to run on this thread.
-        :param args: Arguments to pass to the callback function
-        :param kwargs: Keywords arguments to pass to the callback function
+        :param Callable fn: The function to run on this thread.
+        :param args: Arguments to pass to the function
+        :param kwargs: Keywords arguments to pass to the function
         """
 
-        super(Worker, self).__init__()
+        super().__init__()
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
@@ -80,6 +80,25 @@ class Worker(QRunnable):
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
             self.signals.finished.emit()  # Done
+
+
+class MonitoredWorker(Worker):
+    """Passes callabck function to worker function under given kwarg"""
+
+    def __init__(self, kwarg_name, fn, *args, **kwargs):
+        """
+
+        :param kwarg_name: The name of a kwarg for the callback function in 'fn'
+        :param Callable fn: The function to run on this thread.
+        :param args: Arguments to pass to the function
+        :param kwargs: Keywords arguments to pass to the function
+        """
+
+        kwargs[kwarg_name] = self.callback_delegate
+        super().__init__(fn, *args, **kwargs)
+
+    def callback_delegate(self, n, i):
+        self.signals.progress.emit(n, i)
 
 
 class Custom(QtWidgets.QDialog):
