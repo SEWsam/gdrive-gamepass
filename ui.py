@@ -205,7 +205,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # region Threading
         self.thread_queue = []
-        self.threads_progress = {}
+        self.queue_progress = {}
         self.task_count = 0
         self.start_time = 0.0
         self.end_time = 0.0
@@ -257,7 +257,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if not isinstance(i, QtWidgets.QStatusBar) or not isinstance(i, QtWidgets.QProgressBar):
                 i.setEnabled(x)
 
-    def report_progress(self, n=0, i=0, reset=False):
+    def report_progress(self, n, i):
         """Support thread_reporter callback for sync_module. Reports to the progress bar.
 
         Uniquely identifies each task by thread ID so progress values can be maintained across
@@ -268,22 +268,19 @@ class MainWindow(QtWidgets.QMainWindow):
         :param bool reset: Reset the progress bar.
         """
 
-        # TODO: Threading fix. Create a slot+signal for progress.
-        # jsut make the id thing be done api level.
-
-        if not reset:
+        if n != -1 and i != -1:
             progress_data = {str(i): n}
-            self.threads_progress.update(progress_data)
+            self.queue_progress.update(progress_data)
 
             progress_value = 0
 
-            for thread in self.threads_progress:
-                progress_value += int(self.threads_progress[thread] / self.task_count)
+            for thread in self.queue_progress:
+                progress_value += int(self.queue_progress[thread] / self.task_count)
 
             self.sync_progress.setValue(progress_value)
         else:
             self.sync_progress.setValue(0)
-            self.threads_progress = {}
+            self.queue_progress = {}
             self.task_count = 0
 
     @pyqtSlot()
@@ -314,6 +311,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for i, game in enumerate(self.settings['games']):
             worker = Worker(self.session.sync, i)
             worker.signals.finished.connect(self.sync_queue_delegate)
+            worker.signals.progress.connect(self.report_progress)
 
             if i == 0:
                 initial_worker = worker
