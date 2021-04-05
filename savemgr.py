@@ -94,7 +94,6 @@ class ManagerSession:
     """
 
     def __init__(self):
-
         self.drive = None
         self.app_folder = None
         self.app_config = None
