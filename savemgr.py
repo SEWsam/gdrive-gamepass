@@ -104,6 +104,7 @@ class ManagerSession:
         """Update local config file to match changes"""
 
         with open('settings.json', 'w') as f:
+            logger.debug(f"Writing changes to local config file: {self.local_config}")
             f.write(json.dumps(self.local_config, indent=4))
 
     def remote_config_handler(self, delete=False, index=None, **kwargs):
@@ -118,18 +119,23 @@ class ManagerSession:
 
         try:
             working_json = json.loads(self.app_config.GetContentString())
+            logger.debug(f"Loaded current remote config: {working_json}")
         except AttributeError:
+            logger.error("Error loading config.")
+            logger.debug("Config error: Possibly not authenticated/Unknown initialization error")
             return None
 
         if not delete:
             if index is not None:
                 if kwargs:
                     working_json['games'][index].update(**kwargs)
+                    logger.debug(f"Updated values for game[{index}] with {kwargs}")
 
                 return_value = working_json['games'][index]
             else:
                 if kwargs:
                     working_json['games'].append(kwargs)
+                    logger.debug(f"Added game entry: {kwargs}")
 
                 return_value = working_json['games']
         else:
@@ -138,12 +144,16 @@ class ManagerSession:
 
             working_json['games'].pop(index)
             working_json.update(base_revision=working_json['base_revision'] + 1)
+            logger.debug(f"Deleted game entry at index: {index}")
+
             return_value = working_json['games']
 
         if kwargs or delete:
             self.app_config.SetContentString(json.dumps(working_json, indent=4))
             self.app_config.Upload()
+            logger.debug("Uploaded config changes to remote.")
 
+        logger.debug(f"Fetched config json: {return_value}")
         return return_value
 
     def initialize_gdrive(self, original=None):
@@ -152,18 +162,20 @@ class ManagerSession:
         :param original: Preexisting app folder if applicable.
         """
 
-        logger.info("Initializing Google Drive app")
+        logger.info("Setting up Google Drive")
 
         self.app_folder = original or self.drive.CreateFile(
             {'title': 'Gamepass Saves', 'mimeType': 'application/vnd.google-apps.folder'}
         )
         self.app_folder.Upload()
+        logger.debug("Created/re-uploaded app folder")
 
         self.app_config = self.drive.CreateFile(
             {'title': 'config.json', 'mimeType': 'application/json', 'parents': [{'id': self.app_folder['id']}]}
         )
         self.app_config.SetContentString('{"base_revision": 0, "games": []}')
         self.app_config.Upload()
+        logger.debug("Created and uploaded base app config file.")
 
     def authenticate(self):
         """Create an authenticated drive session."""
@@ -226,34 +238,43 @@ class ManagerSession:
 
         game_config = self.local_config['games'][local_index]
         base_hash = game_config['base_hash']
+        logger.debug(f"Hash of save, at last sync was: {base_hash}")
 
         if diff_local:
             current_hash = hash_dir(game_config['path'])
+            logger.debug(f"Current save hash for local index '{local_index}': {current_hash}")
 
             if current_hash == base_hash:
+                logger.debug(f"No changes detected locally. Local index: '{local_index}'")
                 return False
             else:
+                logger.debug(f"Changes detected locally since last sync. Local index: '{local_index}'")
                 return True
         else:
             cloud_config = self.remote_config_handler(index=game_config['cloud_index'])
             cloud_hash = cloud_config['latest_hash']
+            logger.debug(f"Current save hash for latest remote save: {cloud_hash} (Local index: {local_index})")
 
             if cloud_hash == base_hash:
+                logger.debug(f"Last sync matches latest remote save")
                 return False
             else:
+                logger.debug(f"Last sync DOES NOT match latest remote save")
                 return True
 
     def add_game_entry(self, name):
         self.remote_config_handler(name=name, saves=[], latest_hash='da39a3ee5e6b4b0d3255bfef95601890afd80709')
 
+        root_title = f"{name}_{len(self.remote_config_handler()) - 1}"
         save_root = self.drive.CreateFile(
             {
-                'title': f"{name}_{len(self.remote_config_handler()) - 1}",
+                'title': root_title,
                 'mimeType': 'application/vnd.google-apps.folder',
                 'parents': [{'id': self.app_folder['id']}]
             }
         )
         save_root.Upload()
+        logger.debug(f"Created and uploaded save root folder with name {root_title}")
 
         self.remote_config_handler(index=-1, root_id=save_root['id'])
 

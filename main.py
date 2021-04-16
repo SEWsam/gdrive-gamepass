@@ -21,6 +21,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sys
 import logging
+from datetime import datetime
+
 from PyQt5 import QtWidgets
 from ui import MainWindow
 
@@ -54,22 +56,27 @@ root_logger.setLevel('DEBUG')
 pyqt_logger = logging.getLogger('PyQt5')
 pyqt_logger.setLevel('ERROR')
 
-log_file_handler = logging.FileHandler(filename='debug.log')
+log_time = datetime.now().strftime('%Y%m%d_%H%M%S')
+log_file_handler = logging.FileHandler(filename=f'logs\\{log_time}-debug.log')
 log_file_handler.setLevel('DEBUG')
 log_file_format = logging.Formatter('%(asctime)s - %(origin)-40s - %(levelname)-8s - %(message)s')
 log_file_handler.setFormatter(log_file_format)
 root_logger.addHandler(log_file_handler)
 
 if __name__ == '__main__':
-    ahhh = logging.root.manager.loggerDict
+    try:
+        root_logger.debug('Application Entry.')
+        ahhh = logging.root.manager.loggerDict
 
-    app = QtWidgets.QApplication(sys.argv)
-    window = MainWindow()
+        app = QtWidgets.QApplication(sys.argv)
+        window = MainWindow()
 
-    base_handler = StatusBarLogger(window)
-    base_handler.setLevel(logging.INFO)
-    base_format = logging.Formatter('%(message)s')
-    base_handler.setFormatter(base_format)
-    root_logger.addHandler(base_handler)
+        base_handler = StatusBarLogger(window)
+        base_handler.setLevel(logging.INFO)
+        base_format = logging.Formatter('%(message)s')
+        base_handler.setFormatter(base_format)
+        root_logger.addHandler(base_handler)
 
-    app.exec_()
+        app.exec_()
+    finally:
+        root_logger.debug('Application Exit')
